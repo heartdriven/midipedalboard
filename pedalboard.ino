@@ -1,87 +1,85 @@
-#include <MIDI.h>
+#include <Wire.h>
+#include "SparkFun_TCA9534.h"
 
-MIDI_CREATE_DEFAULT_INSTANCE();
-
-int mem[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// Array of 6 sensor objects:
+TCA9534 sensors[6];
+// Respective sensor addresses:
+int addresses[6] = {0x20, 0x21, 0x22, 0x23, 0x24, 0x25};
+// Main state object, which keeps track of the read values:
+int state[6][8];
+// Amount of sensors per sensorbar:
+int sizes[6] = {0, 0, 0, 0, 0, 0};
 
 void setup() {
-  MIDI.begin(MIDI_CHANNEL_OMNI);
+  Serial.begin(115200);
 
-  pinMode(2, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
-  pinMode(4, INPUT_PULLUP);
-  pinMode(5, INPUT_PULLUP);
-  pinMode(6, INPUT_PULLUP);
-  pinMode(7, INPUT_PULLUP);
-  pinMode(8, INPUT_PULLUP);
-  pinMode(9, INPUT_PULLUP);
-  pinMode(10, INPUT_PULLUP);
-  pinMode(11, INPUT_PULLUP);
-  pinMode(12, INPUT_PULLUP);
-  pinMode(13, INPUT_PULLUP);
-  pinMode(14, INPUT_PULLUP);
-  pinMode(15, INPUT_PULLUP);
-  pinMode(16, INPUT_PULLUP);
-  pinMode(17, INPUT_PULLUP);
-  pinMode(18, INPUT_PULLUP);
-  pinMode(19, INPUT_PULLUP);
-  pinMode(20, INPUT_PULLUP);
-  pinMode(21, INPUT_PULLUP);
-  pinMode(22, INPUT_PULLUP);
-  pinMode(23, INPUT_PULLUP);
-  pinMode(24, INPUT_PULLUP);
-  pinMode(25, INPUT_PULLUP);
-  pinMode(26, INPUT_PULLUP);
-  pinMode(27, INPUT_PULLUP);
-  pinMode(28, INPUT_PULLUP);
-  
+  // Hardcoded lengths of sensor for now:
+  sizes[0] = 8;
 
-  pinMode(30, OUTPUT);
+  // Set state initial values:
+  for (int i = 0; i < 6; i++) {
+    // Set all states to HIGH initially:
+    for (int j = 0; j < sizes[i]; j++) {
+      state[i][j] = NULL;
+    }
+  }
+  // Wait for Serial to be ready before printing anything:
+  while(!Serial);
+
+  Wire.begin();
+  Wire.setClock(3400000);
+
+  for (int i = 0; i < 6; i++) {
+    if (sensors[i].begin(Wire, addresses[i]) == true) {
+      char bufferSensorbar[40];
+      sprintf(bufferSensorbar, "Sensorbar %i active.", i);
+      Serial.println(bufferSensorbar);
+      for (int j = 0; j < sizes[i]; j++) {
+        sensors[i].pinMode(j, INPUT_PULLUP);
+        sensors[i].digitalWrite(j, HIGH);
+
+        // Also, set initial state to HIGH:
+        state[i][j] = HIGH;
+      }
+    }
+  }
 }
 
 void loop() {
-  int sensorVal[] = {
-    !digitalRead(2),
-    !digitalRead(3),
-    !digitalRead(4),
-    !digitalRead(5),
-    !digitalRead(6),
-    !digitalRead(7),
-    !digitalRead(8),
-    !digitalRead(9),
-    !digitalRead(10),
-    !digitalRead(11),
-    !digitalRead(12),
-    !digitalRead(13),
-    !digitalRead(14),
-    !digitalRead(15),
-    !digitalRead(16),
-    !digitalRead(17),
-    !digitalRead(18),
-    !digitalRead(19),
-    !digitalRead(20),
-    !digitalRead(21),
-    !digitalRead(22),
-    !digitalRead(23),
-    !digitalRead(24),
-    !digitalRead(25),
-    !digitalRead(26),
-    !digitalRead(27),
-    !digitalRead(28)
-  };
+  // Loops over all 6 sensor bars (if defined):
+  for (int i = 0; i < 6; i++) {
+    // Looping over all sensors as defined in sizes[] array:
+    for (int j = 0; j < sizes[i]; j++) {
+      char bufferCurrentState[40];
+      // Reading state of the sensor:
+      bool readState = sensors[i].digitalRead(j);
+      if (state[i][j] != readState) {
+        sprintf(bufferCurrentState, "[%i - %i] - %s", i, j, readState ? "HIGH" : "LOW");
+        Serial.println(bufferCurrentState);
+        state[i][j] = readState;
 
-  for (int j = 0; j < 27; j++) {
-    if (sensorVal[j] != mem[j]) {
-      mem[j] = sensorVal[j];
-
-        if (mem[j]) {
-          MIDI.sendNoteOn(j + 48, 64, 1);
-          digitalWrite(30, HIGH);
-          
-        } else {
-          MIDI.sendNoteOff(j + 48, 64, 1);
-          digitalWrite(30, LOW);
-        }
+        // toString function for debugging:
+        printState(i);
+      }
     }
   }
+}
+
+/*
+  Debug function that prints the current state.
+
+  Loops over the current state array of a certain sensorbar and prints the
+  values that were stored in a readable manner.
+*/
+void printState(int i) {
+  Serial.print("Sensorbar ");
+  Serial.print(i);
+  Serial.print(" state: [");
+  for (int j = 0; j < sizes[i]; j++) {
+    Serial.print(state[i][j]);
+    if (j > sizes[i] - 1) {
+      Serial.print("-");
+    }
+  }
+  Serial.print("]\n");
 }
